@@ -6,6 +6,7 @@ import (
 	"go_grpc/greet/greetpb"
 	"io"
 	"log"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -26,6 +27,10 @@ func main() {
 	doUnary(c)
 
 	doServerStreaming(c)
+
+	doClientStreaming(c)
+
+	doBiDiStreaming(c)
 
 }
 
@@ -67,4 +72,110 @@ func doServerStreaming(c greetpb.GreetServiceClient) {
 		}
 		log.Printf("Response from GreetManyTimes: %v", response.GetResult())
 	}
+}
+
+func doClientStreaming(c greetpb.GreetServiceClient) {
+	fmt.Println("Do CLient Streaming")
+
+	stream, err := c.LongGreet(context.Background())
+
+	req := []*greetpb.LongGreetRequest{
+		{
+			Greeting: &greetpb.Greeting{
+				FirstName: "John",
+				LastName:  "Doe",
+			},
+		},
+		{
+			Greeting: &greetpb.Greeting{
+				FirstName: "Jane",
+				LastName:  "Doe",
+			},
+		},
+		{
+			Greeting: &greetpb.Greeting{
+				FirstName: "Stephan",
+				LastName:  "Doe",
+			},
+		},
+	}
+
+	if err != nil {
+		log.Fatalf("error while calling LongGreet RPC: %v", err)
+	}
+
+	for _, req := range req {
+		fmt.Printf("Sending req: %v\n", req)
+		stream.Send(req)
+	}
+
+	res, err := stream.CloseAndRecv()
+
+	if err != nil {
+		log.Fatalf("error while receiving response: %v", err)
+	}
+
+	fmt.Printf("LongGreet Response: %v\n", res)
+}
+
+func doBiDiStreaming(c greetpb.GreetServiceClient) {
+	fmt.Println("Do BiDi Streaming")
+
+	req := []*greetpb.GreetEveryoneRequest{
+		{
+			Greeting: &greetpb.Greeting{
+				FirstName: "John",
+				LastName:  "Doe",
+			},
+		},
+		{
+			Greeting: &greetpb.Greeting{
+				FirstName: "Jane",
+				LastName:  "Doe",
+			},
+		},
+		{
+			Greeting: &greetpb.Greeting{
+				FirstName: "Stephan",
+				LastName:  "Doe",
+			},
+		},
+	}
+
+	stream, err := c.GreetEveryone(context.Background())
+	if err != nil {
+		log.Fatalf("Error while calling GreetEveryone RPC: %v", err)
+		return
+	}
+
+	waitChannel := make(chan struct{})
+
+	// send data to server
+	go func() {
+		for _, req := range req {
+			fmt.Printf("Sending req: %v\n", req)
+			stream.Send(req)
+			time.Sleep(1 * time.Second)
+		}
+		stream.CloseSend()
+	}()
+
+	// recive data from client
+	go func() {
+		for {
+			res, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Fatalf("Error while receiving response: %v", err)
+				break
+			}
+			fmt.Printf("Recived response from GreetEveryone: %v\n", res)
+		}
+		close(waitChannel)
+	}()
+
+	// block until everything is done
+	<-waitChannel
 }

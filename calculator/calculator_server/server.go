@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"go_grpc/calculator/calculatorpb"
 	"log"
+	"math"
 	"net"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type server struct {
@@ -15,7 +18,7 @@ type server struct {
 }
 
 func (s *server) Sum(ctx context.Context, req *calculatorpb.SumRequest) (*calculatorpb.SumResponse, error) {
-	fmt.Printf("Received Sum RPC: %v", req)
+	fmt.Printf("Received Sum RPC: %v\n", req)
 	firstNum := req.GetNum1()
 	secondNum := req.GetNum2()
 
@@ -26,6 +29,23 @@ func (s *server) Sum(ctx context.Context, req *calculatorpb.SumRequest) (*calcul
 	}
 
 	return res, nil
+}
+
+func (*server) SquareRoot(ctx context.Context, req *calculatorpb.SquareRootRequest) (*calculatorpb.SquareRootResponse, error) {
+	fmt.Printf("Received Square RPC: %v \n", req)
+
+	number := req.GetNumber()
+
+	if number < 0 {
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			fmt.Sprintf("Received a negative number: %v \n", number),
+		)
+	}
+
+	return &calculatorpb.SquareRootResponse{
+		NumberRoot: math.Sqrt(float64(number)),
+	}, nil
 }
 
 func main() {
